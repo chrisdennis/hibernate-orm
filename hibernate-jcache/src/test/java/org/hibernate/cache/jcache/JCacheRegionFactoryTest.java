@@ -8,6 +8,9 @@ package org.hibernate.cache.jcache;
 
 import java.util.Properties;
 
+import javax.cache.Cache;
+import javax.cache.CacheManager;
+
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -18,6 +21,7 @@ import org.hibernate.cache.spi.access.AccessType;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.CoreMatchers.nullValue;
+import static org.hamcrest.CoreMatchers.sameInstance;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.fail;
 
@@ -93,6 +97,29 @@ public class JCacheRegionFactoryTest {
 		catch ( javax.cache.CacheException e ) {
 			assertThat( factory.isStarted(), is( false ) );
 		}
+	}
+
+	@Test
+	public void testStopsCacheManagerOnShutdown() {
+		factory.start( null, null );
+		final CacheManager cacheManager = factory.getCacheManager();
+		assertThat( cacheManager.isClosed(), is( false ) );
+		factory.stop();
+		assertThat(cacheManager.isClosed(), is(true));
+	}
+
+	@Test(expected = IllegalStateException.class)
+	public void testThrowsIllegalStateExceptionWhenNotStarted() {
+		factory.getOrCreateCache( "foo", null, null );
+	}
+
+	@Test
+	public void testCreatesNonExistingCacheNamedLikeRegion() {
+		factory.start( null, null );
+		final Cache<Object, Object> foo = factory.getOrCreateCache( "foo", null, null );
+		assertThat( foo, notNullValue());
+		assertThat( factory.getCacheManager().getCache( "foo" ), sameInstance( foo ));
+		assertThat( factory.getOrCreateCache( "foo", null, null ), sameInstance( foo ));
 	}
 
 	@After

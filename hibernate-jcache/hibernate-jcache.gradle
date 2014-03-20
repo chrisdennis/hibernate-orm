@@ -3,6 +3,7 @@ dependencies {
     compile( libraries.jcache )
 
     testCompile project( ':hibernate-testing' )
+    testCompile( libraries.mockito )
     testRuntime( libraries.ehcache3 )
 }
 

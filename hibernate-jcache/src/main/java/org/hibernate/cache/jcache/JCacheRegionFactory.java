@@ -9,9 +9,13 @@ package org.hibernate.cache.jcache;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.Properties;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import javax.cache.Cache;
 import javax.cache.CacheManager;
 import javax.cache.Caching;
+import javax.cache.configuration.Configuration;
+import javax.cache.configuration.MutableConfiguration;
 import javax.cache.spi.CachingProvider;
 import org.hibernate.boot.spi.SessionFactoryOptions;
 
@@ -34,8 +38,8 @@ public class JCacheRegionFactory implements RegionFactory {
 
 	private static final String PROP_PREFIX = "hibernate.javax.cache";
 
-	public static final String  PROVIDER    = PROP_PREFIX + ".provider";
-	public static final String  CONFIG_URI  = PROP_PREFIX + ".uri";
+	public static final String PROVIDER = PROP_PREFIX + ".provider";
+	public static final String CONFIG_URI = PROP_PREFIX + ".uri";
 
 	private static final JCacheMessageLogger LOG = Logger.getMessageLogger(
 			JCacheMessageLogger.class,
@@ -112,49 +116,90 @@ public class JCacheRegionFactory implements RegionFactory {
 
 	@Override
 	public long nextTimestamp() {
-		return System.currentTimeMillis() / 100;
+		return nextTS();
 	}
 
 	@Override
 	public EntityRegion buildEntityRegion(final String regionName, final Properties properties, final CacheDataDescription metadata)
 			throws CacheException {
-		throw new UnsupportedOperationException( "Implement me!" );
+		final Cache<Object, Object> cache = getOrCreateCache( regionName, properties, metadata );
+		return new JCacheEntityRegion( cache );
 	}
 
 	@Override
 	public NaturalIdRegion buildNaturalIdRegion(final String regionName, final Properties properties, final CacheDataDescription metadata)
 			throws CacheException {
-		throw new UnsupportedOperationException( "Implement me!" );
+		final Cache<Object, Object> cache = getOrCreateCache( regionName, properties, metadata );
+		return new JCacheNaturalIdRegion( cache );
 	}
 
 	@Override
 	public CollectionRegion buildCollectionRegion(final String regionName, final Properties properties, final CacheDataDescription metadata)
 			throws CacheException {
-		throw new UnsupportedOperationException( "Implement me!" );
+		final Cache<Object, Object> cache = getOrCreateCache( regionName, properties, metadata );
+		return new JCacheCollectionRegion( cache );
 	}
 
 	@Override
 	public QueryResultsRegion buildQueryResultsRegion(final String regionName, final Properties properties)
 			throws CacheException {
-		throw new UnsupportedOperationException( "Implement me!" );
+		final Cache<Object, Object> cache = getOrCreateCache( regionName, properties, null );
+		return new JCacheQueryResultsRegion( cache );
 	}
 
 	@Override
 	public TimestampsRegion buildTimestampsRegion(final String regionName, final Properties properties)
 			throws CacheException {
-		throw new UnsupportedOperationException( "Implement me!" );
+		final Cache<Object, Object> cache = getOrCreateCache( regionName, properties, null );
+		return new JCacheTimestampsRegion( cache );
 	}
 
 	boolean isStarted() {
-		return started.get();
+		return started.get() && cacheManager != null;
+	}
+
+	protected Cache<Object, Object> getOrCreateCache(String regionName, Properties properties, CacheDataDescription metadata) {
+		checkStatus();
+		final Cache<Object, Object> cache = cacheManager.getCache( regionName );
+		if ( cache == null ) {
+			try {
+				return cacheManager.createCache( regionName, newDefaultConfig( properties, metadata ) );
+			}
+			catch ( CacheException e ) {
+				final Cache<Object, Object> existing = cacheManager.getCache( regionName );
+				if ( existing != null ) {
+					return existing;
+				}
+				throw e;
+			}
+		}
+		return cache;
+	}
+
+	protected Configuration<Object, Object> newDefaultConfig(Properties properties, CacheDataDescription metadata) {
+		return new MutableConfiguration<Object, Object>();
 	}
 
 	CacheManager getCacheManager() {
 		return cacheManager;
 	}
 
+	static long nextTS() {
+		return System.currentTimeMillis() / 100;
+	}
+
+	static int timeOut() {
+		return (int) (TimeUnit.SECONDS.toMillis(60) / 100);
+	}
+
 	private String getProp(Properties properties, String prop) {
 		return properties != null ? properties.getProperty( prop ) : null;
+	}
+
+	private void checkStatus() {
+		if(!isStarted()) {
+			throw new IllegalStateException("JCacheRegionFactory not yet started!");
+		}
 	}
 
 }
