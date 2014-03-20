@@ -17,10 +17,10 @@ import javax.cache.Caching;
 import javax.cache.configuration.Configuration;
 import javax.cache.configuration.MutableConfiguration;
 import javax.cache.spi.CachingProvider;
-import org.hibernate.boot.spi.SessionFactoryOptions;
 
 import org.jboss.logging.Logger;
 
+import org.hibernate.boot.spi.SessionFactoryOptions;
 import org.hibernate.cache.CacheException;
 import org.hibernate.cache.spi.CacheDataDescription;
 import org.hibernate.cache.spi.CollectionRegion;
@@ -48,11 +48,13 @@ public class JCacheRegionFactory implements RegionFactory {
 
 	private final AtomicBoolean started = new AtomicBoolean( false );
 	private volatile CacheManager cacheManager;
+	private SessionFactoryOptions options;
 
 	@Override
 	public void start(final SessionFactoryOptions options, final Properties properties) throws CacheException {
 		if ( started.compareAndSet( false, true ) ) {
 			synchronized ( this ) {
+				this.options = options;
 				try {
 					final CachingProvider cachingProvider;
 					final String provider = getProp( properties, PROVIDER );
@@ -123,21 +125,21 @@ public class JCacheRegionFactory implements RegionFactory {
 	public EntityRegion buildEntityRegion(final String regionName, final Properties properties, final CacheDataDescription metadata)
 			throws CacheException {
 		final Cache<Object, Object> cache = getOrCreateCache( regionName, properties, metadata );
-		return new JCacheEntityRegion( cache );
+		return new JCacheEntityRegion( cache, metadata, options );
 	}
 
 	@Override
 	public NaturalIdRegion buildNaturalIdRegion(final String regionName, final Properties properties, final CacheDataDescription metadata)
 			throws CacheException {
 		final Cache<Object, Object> cache = getOrCreateCache( regionName, properties, metadata );
-		return new JCacheNaturalIdRegion( cache );
+		return new JCacheNaturalIdRegion( cache, metadata, options );
 	}
 
 	@Override
 	public CollectionRegion buildCollectionRegion(final String regionName, final Properties properties, final CacheDataDescription metadata)
 			throws CacheException {
 		final Cache<Object, Object> cache = getOrCreateCache( regionName, properties, metadata );
-		return new JCacheCollectionRegion( cache );
+		return new JCacheCollectionRegion( cache, metadata, options );
 	}
 
 	@Override

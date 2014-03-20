@@ -8,7 +8,9 @@ package org.hibernate.cache.jcache;
 
 import javax.cache.Cache;
 
+import org.hibernate.boot.spi.SessionFactoryOptions;
 import org.hibernate.cache.CacheException;
+import org.hibernate.cache.spi.CacheDataDescription;
 import org.hibernate.cache.spi.NaturalIdRegion;
 import org.hibernate.cache.spi.access.AccessType;
 import org.hibernate.cache.spi.access.NaturalIdRegionAccessStrategy;
@@ -18,8 +20,8 @@ import org.hibernate.cache.spi.access.NaturalIdRegionAccessStrategy;
  */
 public class JCacheNaturalIdRegion extends JCacheTransactionalDataRegion implements NaturalIdRegion {
 
-	public JCacheNaturalIdRegion(Cache<Object, Object> cache) {
-		super( cache );
+	public JCacheNaturalIdRegion(Cache<Object, Object> cache, CacheDataDescription metadata, SessionFactoryOptions options) {
+		super( cache, metadata, options );
 	}
 
 	@Override
