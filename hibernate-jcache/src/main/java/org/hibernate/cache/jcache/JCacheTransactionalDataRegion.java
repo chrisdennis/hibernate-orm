@@ -9,6 +9,7 @@ package org.hibernate.cache.jcache;
 import java.util.EnumSet;
 import java.util.Set;
 import javax.cache.Cache;
+import javax.cache.processor.EntryProcessor;
 
 import org.hibernate.boot.spi.SessionFactoryOptions;
 import org.hibernate.cache.spi.CacheDataDescription;
@@ -69,4 +70,9 @@ public class JCacheTransactionalDataRegion extends JCacheRegion implements Trans
 	public SessionFactoryOptions getSessionFactoryOptions() {
 		return options;
 	}
+
+	public <T> T invoke(Object key, EntryProcessor<Object, Object, T> entryProcessor, Object... args) {
+		return cache.invoke( key, entryProcessor, args);
+	}
+
 }

@@ -10,6 +10,9 @@ import javax.cache.Cache;
 import org.hibernate.boot.spi.SessionFactoryOptions;
 
 import org.hibernate.cache.CacheException;
+import org.hibernate.cache.jcache.access.NonStrictCollectionRegionAccessStrategy;
+import org.hibernate.cache.jcache.access.ReadOnlyCollectionRegionAccessStrategy;
+import org.hibernate.cache.jcache.access.ReadWriteCollectionRegionAccessStrategy;
 import org.hibernate.cache.spi.CacheDataDescription;
 import org.hibernate.cache.spi.CollectionRegion;
 import org.hibernate.cache.spi.access.AccessType;
@@ -26,6 +29,17 @@ public class JCacheCollectionRegion extends JCacheTransactionalDataRegion implem
 
 	@Override
 	public CollectionRegionAccessStrategy buildAccessStrategy(AccessType accessType) throws CacheException {
-		throw new UnsupportedOperationException( "Implement me!" );
+		switch ( accessType ) {
+			case READ_ONLY:
+				return new ReadOnlyCollectionRegionAccessStrategy( this );
+			case NONSTRICT_READ_WRITE:
+				return new NonStrictCollectionRegionAccessStrategy( this );
+			case READ_WRITE:
+				return new ReadWriteCollectionRegionAccessStrategy( this );
+			case TRANSACTIONAL:
+				throw new UnsupportedOperationException( "Implement me!" );
+			default:
+				throw new UnsupportedOperationException( "Unknown AccessType: " + accessType.name() );
+		}
 	}
 }

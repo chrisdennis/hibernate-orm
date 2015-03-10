@@ -10,6 +10,9 @@ import javax.cache.Cache;
 
 import org.hibernate.boot.spi.SessionFactoryOptions;
 import org.hibernate.cache.CacheException;
+import org.hibernate.cache.jcache.access.NonStrictNaturalIdRegionAccessStrategy;
+import org.hibernate.cache.jcache.access.ReadOnlyNaturalIdRegionAccessStrategy;
+import org.hibernate.cache.jcache.access.ReadWriteNaturalIdRegionAccessStrategy;
 import org.hibernate.cache.spi.CacheDataDescription;
 import org.hibernate.cache.spi.NaturalIdRegion;
 import org.hibernate.cache.spi.access.AccessType;
@@ -26,6 +29,17 @@ public class JCacheNaturalIdRegion extends JCacheTransactionalDataRegion impleme
 
 	@Override
 	public NaturalIdRegionAccessStrategy buildAccessStrategy(AccessType accessType) throws CacheException {
-		throw new UnsupportedOperationException( "Implement me!" );
+		switch ( accessType ) {
+			case READ_ONLY:
+				return new ReadOnlyNaturalIdRegionAccessStrategy( this );
+			case NONSTRICT_READ_WRITE:
+				return new NonStrictNaturalIdRegionAccessStrategy( this );
+			case READ_WRITE:
+				return new ReadWriteNaturalIdRegionAccessStrategy( this );
+			case TRANSACTIONAL:
+				throw new UnsupportedOperationException( "Implement me!" );
+			default:
+				throw new UnsupportedOperationException( "Unknown AccessType: " + accessType.name() );
+		}
 	}
 }
