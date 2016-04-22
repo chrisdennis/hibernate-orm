@@ -9,7 +9,6 @@ package org.hibernate.cache.jcache;
 import java.util.EnumSet;
 import java.util.Set;
 import javax.cache.Cache;
-import javax.cache.processor.EntryProcessor;
 
 import org.hibernate.boot.spi.SessionFactoryOptions;
 import org.hibernate.cache.spi.CacheDataDescription;
@@ -42,8 +41,8 @@ public class JCacheTransactionalDataRegion extends JCacheRegion implements Trans
 	}
 
 	protected void throwIfAccessTypeUnsupported(AccessType accessType) {
-		if ( supportedAccessTypes().contains( accessType ) ) {
-			throw new UnsupportedOperationException( "This doesn't JCacheTransactionalDataRegion doesn't support " + accessType );
+		if ( !supportedAccessTypes().contains( accessType ) ) {
+			throw new UnsupportedOperationException( "JCacheTransactionalDataRegion doesn't support " + accessType );
 		}
 	}
 
@@ -67,12 +66,15 @@ public class JCacheTransactionalDataRegion extends JCacheRegion implements Trans
 		cache.put( key, value );
 	}
 
+	public boolean putIfAbsent(Object key, Object value) {
+		return cache.putIfAbsent( key, value );
+	}
+
+	public boolean replace(Object key, Object expected, Object value) {
+		return cache.replace( key, expected, value );
+	}
+
 	public SessionFactoryOptions getSessionFactoryOptions() {
 		return options;
 	}
-
-	public <T> T invoke(Object key, EntryProcessor<Object, Object, T> entryProcessor, Object... args) {
-		return cache.invoke( key, entryProcessor, args);
-	}
-
 }
