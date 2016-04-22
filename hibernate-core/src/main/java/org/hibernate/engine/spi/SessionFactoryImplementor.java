@@ -21,12 +21,13 @@ import org.hibernate.Session;
 import org.hibernate.SessionFactory;
 import org.hibernate.SessionFactoryObserver;
 import org.hibernate.boot.spi.SessionFactoryOptions;
+import org.hibernate.cache.spi.CollectionRegion;
+import org.hibernate.cache.spi.EntityRegion;
+import org.hibernate.cache.spi.NaturalIdRegion;
 import org.hibernate.cache.spi.QueryCache;
 import org.hibernate.cache.spi.Region;
 import org.hibernate.cache.spi.UpdateTimestampsCache;
-import org.hibernate.cache.spi.access.CollectionRegionAccessStrategy;
-import org.hibernate.cache.spi.access.EntityRegionAccessStrategy;
-import org.hibernate.cache.spi.access.NaturalIdRegionAccessStrategy;
+import org.hibernate.cache.spi.access.AccessType;
 import org.hibernate.cache.spi.access.RegionAccessStrategy;
 import org.hibernate.cfg.Settings;
 import org.hibernate.context.spi.CurrentTenantIdentifierResolver;
@@ -427,14 +428,14 @@ public interface SessionFactoryImplementor extends Mapping, SessionFactory, Quer
 	 */
 	@Deprecated
 	default Region getSecondLevelCacheRegion(String regionName) {
-		final EntityRegionAccessStrategy entityRegionAccess = getCache().getEntityRegionAccess( regionName );
-		if ( entityRegionAccess != null ) {
-			return entityRegionAccess.getRegion();
+		final EntityRegion entityRegion = getCache().getEntityRegion( regionName );
+		if ( entityRegion != null ) {
+			return entityRegion;
 		}
 
-		final CollectionRegionAccessStrategy collectionRegionAccess = getCache().getCollectionRegionAccess( regionName );
-		if ( collectionRegionAccess != null ) {
-			return collectionRegionAccess.getRegion();
+		final CollectionRegion collectionRegion = getCache().getCollectionRegion( regionName );
+		if ( collectionRegion != null ) {
+			return collectionRegion;
 		}
 
 		return null;
@@ -454,14 +455,14 @@ public interface SessionFactoryImplementor extends Mapping, SessionFactory, Quer
 	 */
 	@Deprecated
 	default RegionAccessStrategy getSecondLevelCacheRegionAccessStrategy(String regionName) {
-		final EntityRegionAccessStrategy entityRegionAccess = getCache().getEntityRegionAccess( regionName );
-		if ( entityRegionAccess != null ) {
-			return entityRegionAccess;
+		final EntityRegion entityRegion = getCache().getEntityRegion( regionName );
+		if ( entityRegion != null ) {
+			return entityRegion.buildAccessStrategy( AccessType.READ_ONLY );
 		}
 
-		final CollectionRegionAccessStrategy collectionRegionAccess = getCache().getCollectionRegionAccess( regionName );
-		if ( collectionRegionAccess != null ) {
-			return collectionRegionAccess;
+		final CollectionRegion collectionRegion = getCache().getCollectionRegion( regionName );
+		if ( collectionRegion != null ) {
+			return collectionRegion.buildAccessStrategy( AccessType.READ_ONLY );
 		}
 
 		return null;
@@ -475,12 +476,11 @@ public interface SessionFactoryImplementor extends Mapping, SessionFactory, Quer
 	 * @return The region
 	 *
 	 * @deprecated (since 5.2) Use this factory's {@link #getCache()} ->
-	 * {@link CacheImplementor#getNaturalIdCacheRegionAccessStrategy(String)} ->
-	 * {@link NaturalIdRegionAccessStrategy#getRegion()} instead.
+	 * {@link CacheImplementor#getNaturalIdCacheRegion(String)} instead.
 	 */
 	@Deprecated
 	default Region getNaturalIdCacheRegion(String regionName) {
-		return getCache().getNaturalIdCacheRegionAccessStrategy( regionName ).getRegion();
+		return getCache().getNaturalIdCacheRegion( regionName );
 	}
 
 	/**
@@ -491,11 +491,18 @@ public interface SessionFactoryImplementor extends Mapping, SessionFactory, Quer
 	 * @return That region's "access strategy"
 	 *
 	 * @deprecated (since 5.2) Use this factory's {@link #getCache()} ->
-	 * {@link CacheImplementor#getNaturalIdCacheRegionAccessStrategy(String)} instead.
+	 * {@link CacheImplementor#getNaturalIdCacheRegion(String)} ->
+	 * {@link NaturalIdRegion#buildAccessStrategy(AccessType)} instead.
 	 */
 	@Deprecated
 	default RegionAccessStrategy getNaturalIdCacheRegionAccessStrategy(String regionName) {
-		return getCache().getNaturalIdCacheRegionAccessStrategy( regionName );
+		NaturalIdRegion r = getCache().getNaturalIdCacheRegion( regionName );
+		if (r == null) {
+			return null;
+		}
+		else {
+			return r.buildAccessStrategy( AccessType.READ_ONLY );
+		}
 	}
 
 	/**

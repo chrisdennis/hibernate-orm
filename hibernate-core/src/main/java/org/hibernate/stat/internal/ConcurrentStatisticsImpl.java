@@ -10,10 +10,11 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicLong;
 
+import org.hibernate.cache.spi.CollectionRegion;
+import org.hibernate.cache.spi.EntityRegion;
+import org.hibernate.cache.spi.NaturalIdRegion;
 import org.hibernate.cache.spi.Region;
-import org.hibernate.cache.spi.access.CollectionRegionAccessStrategy;
-import org.hibernate.cache.spi.access.EntityRegionAccessStrategy;
-import org.hibernate.cache.spi.access.NaturalIdRegionAccessStrategy;
+import org.hibernate.cache.spi.access.AccessType;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
 import org.hibernate.internal.CoreMessageLogger;
 import org.hibernate.internal.util.collections.ArrayHelper;
@@ -274,8 +275,8 @@ public class ConcurrentStatisticsImpl implements StatisticsImplementor, Service 
 				return null;
 			}
 
-			final NaturalIdRegionAccessStrategy accessStrategy = sessionFactory.getCache().getNaturalIdCacheRegionAccessStrategy( regionName );
-			stat = new ConcurrentNaturalIdCacheStatisticsImpl( accessStrategy.getRegion(), accessStrategy );
+			final NaturalIdRegion region = sessionFactory.getCache().getNaturalIdCacheRegion( regionName );
+			stat = new ConcurrentNaturalIdCacheStatisticsImpl( region, region.buildAccessStrategy( AccessType.READ_ONLY ) );
 			ConcurrentNaturalIdCacheStatisticsImpl previous;
 			if ( ( previous = naturalIdCacheStatistics.putIfAbsent( regionName, stat ) ) != null ) {
 				stat = previous;
@@ -299,10 +300,10 @@ public class ConcurrentStatisticsImpl implements StatisticsImplementor, Service 
 				return null;
 			}
 
-			final EntityRegionAccessStrategy entityRegionAccess = sessionFactory.getCache().getEntityRegionAccess( regionName );
-			final CollectionRegionAccessStrategy collectionRegionAccess = sessionFactory.getCache().getCollectionRegionAccess( regionName );
+			final EntityRegion entityRegion = sessionFactory.getCache().getEntityRegion( regionName );
+			final CollectionRegion collectionRegion = sessionFactory.getCache().getCollectionRegion( regionName );
 
-			if ( entityRegionAccess == null && collectionRegionAccess == null ) {
+			if ( entityRegion == null && collectionRegion == null ) {
 				final Region region = sessionFactory.getCache().getQueryCache( regionName ).getRegion();
 				if ( region == null ) {
 					throw new IllegalArgumentException( "Could not resolve region name [" + regionName + "]" );
@@ -311,14 +312,14 @@ public class ConcurrentStatisticsImpl implements StatisticsImplementor, Service 
 			}
 			else {
 
-				final Region region = entityRegionAccess != null
-						? entityRegionAccess.getRegion()
-						: collectionRegionAccess.getRegion();
+				final Region region = entityRegion != null
+						? entityRegion
+						: collectionRegion;
 
 				stat = new ConcurrentSecondLevelCacheStatisticsImpl(
 						region,
-						entityRegionAccess,
-						collectionRegionAccess
+						entityRegion == null ? null : entityRegion.buildAccessStrategy( AccessType.READ_ONLY ),
+						collectionRegion == null ? null : collectionRegion.buildAccessStrategy( AccessType.READ_ONLY )
 				);
 			}
 

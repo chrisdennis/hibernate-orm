@@ -142,9 +142,9 @@ public class RefreshUpdatedDataTest extends BaseCoreFunctionalTestCase {
 
 			//READ_UNCOMMITTED because there is no locking to prevent collections from being cached in the first Session
 
-			assertEquals( BEFORE, nonStrictReadWriteCacheableItem2.getName() );
+			assertEquals( AFTER, nonStrictReadWriteCacheableItem2.getName() );
 			assertEquals( 1, nonStrictReadWriteCacheableItem2.getTags().size());
-			assertEquals( BEFORE, nonStrictReadWriteVersionedCacheableItem2.getName() );
+			assertEquals( AFTER, nonStrictReadWriteVersionedCacheableItem2.getName() );
 			assertEquals( 1, nonStrictReadWriteVersionedCacheableItem2.getTags().size() );
 
 			s2.getTransaction().commit();
@@ -212,7 +212,7 @@ public class RefreshUpdatedDataTest extends BaseCoreFunctionalTestCase {
 	}
 
 	@Entity(name = "ReadWriteVersionedCacheableItem")
-	@Cache(usage = CacheConcurrencyStrategy.READ_WRITE, region = "item")
+	@Cache(usage = CacheConcurrencyStrategy.READ_WRITE, region = "item-versioned")
 	public static class ReadWriteVersionedCacheableItem {
 
 		@Id
@@ -299,7 +299,7 @@ public class RefreshUpdatedDataTest extends BaseCoreFunctionalTestCase {
 	}
 
 	@Entity(name = "NonStrictReadWriteVersionedCacheableItem")
-	@Cache(usage = CacheConcurrencyStrategy.NONSTRICT_READ_WRITE, region = "item")
+	@Cache(usage = CacheConcurrencyStrategy.NONSTRICT_READ_WRITE, region = "item-versioned")
 	public static class NonStrictReadWriteVersionedCacheableItem {
 
 		@Id

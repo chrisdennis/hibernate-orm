@@ -10,6 +10,9 @@ import java.io.Serializable;
 
 import org.hibernate.Cache;
 import org.hibernate.HibernateException;
+import org.hibernate.cache.spi.CollectionRegion;
+import org.hibernate.cache.spi.EntityRegion;
+import org.hibernate.cache.spi.NaturalIdRegion;
 import org.hibernate.cache.spi.QueryCache;
 import org.hibernate.cache.spi.RegionFactory;
 import org.hibernate.cache.spi.UpdateTimestampsCache;
@@ -94,31 +97,31 @@ public interface CacheImplementor extends Service, Cache, Serializable {
 	String[] getSecondLevelCacheRegionNames();
 
 	/**
-	 * Find the "access strategy" for the named entity cache region.
+	 * Find the named entity cache region.
 	 *
 	 * @param regionName The name of the region
 	 *
-	 * @return That region's "access strategy"
+	 * @return the region
 	 */
-	EntityRegionAccessStrategy getEntityRegionAccess(String regionName);
+	EntityRegion getEntityRegion(String regionName);
 
 	/**
-	 * Find the "access strategy" for the named collection cache region.
+	 * Find the named collection cache region.
 	 *
 	 * @param regionName The name of the region
 	 *
-	 * @return That region's "access strategy"
+	 * @return the region
 	 */
-	CollectionRegionAccessStrategy getCollectionRegionAccess(String regionName);
+	CollectionRegion getCollectionRegion(String regionName);
 
 	/**
-	 * Find the "access strategy" for the named natrual-id cache region.
+	 * Find the named natural-id cache region.
 	 *
 	 * @param regionName The name of the region
 	 *
-	 * @return That region's "access strategy"
+	 * @return the region
 	 */
-	NaturalIdRegionAccessStrategy getNaturalIdCacheRegionAccessStrategy(String regionName);
+	NaturalIdRegion getNaturalIdCacheRegion(String regionName);
 
 	EntityRegionAccessStrategy determineEntityRegionAccessStrategy(PersistentClass model);
 

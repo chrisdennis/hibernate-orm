@@ -18,6 +18,7 @@ import org.hibernate.SessionFactory;
 import org.hibernate.boot.spi.SessionFactoryOptions;
 import org.hibernate.cache.internal.CacheDataDescriptionImpl;
 import org.hibernate.cache.internal.StandardQueryCache;
+import org.hibernate.cache.spi.CacheDataDescription;
 import org.hibernate.cache.spi.CollectionRegion;
 import org.hibernate.cache.spi.EntityRegion;
 import org.hibernate.cache.spi.NaturalIdRegion;
@@ -55,10 +56,6 @@ public class CacheImpl implements CacheImplementor {
 	private final String cacheRegionPrefix;
 
 	private final transient ConcurrentHashMap<String, Region> allRegionsMap = new ConcurrentHashMap<>();
-
-	private final transient ConcurrentHashMap<String, EntityRegionAccessStrategy> entityRegionAccessStrategyMap = new ConcurrentHashMap<>();
-	private final transient ConcurrentHashMap<String, CollectionRegionAccessStrategy> collectionRegionAccessStrategyMap = new ConcurrentHashMap<>();
-	private final transient ConcurrentHashMap<String, NaturalIdRegionAccessStrategy> naturalIdRegionAccessStrategyMap = new ConcurrentHashMap<>();
 
 	private final transient UpdateTimestampsCache updateTimestampsCache;
 	private final transient QueryCache defaultQueryCache;
@@ -288,12 +285,8 @@ public class CacheImpl implements CacheImplementor {
 
 	@Override
 	public void close() {
-		for ( EntityRegionAccessStrategy access : entityRegionAccessStrategyMap.values() ) {
-			access.getRegion().destroy();
-		}
-
-		for ( CollectionRegionAccessStrategy access : collectionRegionAccessStrategyMap.values() ) {
-			access.getRegion().destroy();
+		for ( Region region : allRegionsMap.values() ) {
+			region.destroy();
 		}
 
 		if ( settings.isQueryCacheEnabled() ) {
@@ -356,9 +349,7 @@ public class CacheImpl implements CacheImplementor {
 	@Override
 	public String[] getSecondLevelCacheRegionNames() {
 		final Set<String> names = new HashSet<>();
-		names.addAll( entityRegionAccessStrategyMap.keySet() );
-		names.addAll( collectionRegionAccessStrategyMap.keySet() );
-		names.addAll( naturalIdRegionAccessStrategyMap.keySet() );
+		names.addAll( allRegionsMap.keySet() );
 		if ( settings.isQueryCacheEnabled() ) {
 			names.add( updateTimestampsCache.getRegion().getName() );
 			names.addAll( queryCaches.keySet() );
@@ -367,18 +358,36 @@ public class CacheImpl implements CacheImplementor {
 	}
 
 	@Override
-	public EntityRegionAccessStrategy getEntityRegionAccess(String regionName) {
-		return entityRegionAccessStrategyMap.get( regionName );
+	public EntityRegion getEntityRegion(String regionName) {
+		Region region = allRegionsMap.get(regionName);
+		if (region == null || !(region instanceof EntityRegion)) {
+			return null;
+		}
+		else {
+			return (EntityRegion) region;
+		}
 	}
 
 	@Override
-	public CollectionRegionAccessStrategy getCollectionRegionAccess(String regionName) {
-		return collectionRegionAccessStrategyMap.get( regionName );
+	public CollectionRegion getCollectionRegion(String regionName) {
+		Region region = allRegionsMap.get(regionName);
+		if (region == null || !(region instanceof CollectionRegion)) {
+			return null;
+		}
+		else {
+			return (CollectionRegion) region;
+		}
 	}
 
 	@Override
-	public NaturalIdRegionAccessStrategy getNaturalIdCacheRegionAccessStrategy(String regionName) {
-		return naturalIdRegionAccessStrategyMap.get( regionName );
+	public NaturalIdRegion getNaturalIdCacheRegion(String regionName) {
+		Region region = allRegionsMap.get(regionName);
+		if (region == null || !(region instanceof NaturalIdRegion)) {
+			return null;
+		}
+		else {
+			return (NaturalIdRegion) region;
+		}
 	}
 
 	@Override
@@ -431,77 +440,133 @@ public class CacheImpl implements CacheImplementor {
 	@Override
 	public EntityRegionAccessStrategy determineEntityRegionAccessStrategy(PersistentClass model) {
 		final String cacheRegionName = cacheRegionPrefix + model.getRootClass().getCacheRegionName();
-		EntityRegionAccessStrategy accessStrategy = entityRegionAccessStrategyMap.get( cacheRegionName );
-		if ( accessStrategy == null && settings.isSecondLevelCacheEnabled() ) {
+		if (settings.isSecondLevelCacheEnabled()) {
 			final AccessType accessType = AccessType.fromExternalName( model.getCacheConcurrencyStrategy() );
 			if ( accessType != null ) {
-				LOG.tracef( "Building shared cache region for entity data [%s]", model.getEntityName() );
-				EntityRegion entityRegion = regionFactory.buildEntityRegion(
+				return getEntityRegion(
 						cacheRegionName,
-						sessionFactory.getProperties(),
 						CacheDataDescriptionImpl.decode( model )
-				);
-				accessStrategy = entityRegion.buildAccessStrategy( accessType );
-				entityRegionAccessStrategyMap.put( cacheRegionName, accessStrategy );
+				).buildAccessStrategy(accessType);
 			}
 		}
-		return accessStrategy;
+		return null;
 	}
 
 
 	@Override
 	public NaturalIdRegionAccessStrategy determineNaturalIdRegionAccessStrategy(PersistentClass model) {
-		NaturalIdRegionAccessStrategy naturalIdAccessStrategy = null;
-		if ( model.hasNaturalId() && model.getNaturalIdCacheRegionName() != null ) {
+		if ( settings.isSecondLevelCacheEnabled() && model.hasNaturalId() && model.getNaturalIdCacheRegionName() != null ) {
 			final String naturalIdCacheRegionName = cacheRegionPrefix + model.getNaturalIdCacheRegionName();
-			naturalIdAccessStrategy = naturalIdRegionAccessStrategyMap.get( naturalIdCacheRegionName );
-
-			if ( naturalIdAccessStrategy == null && settings.isSecondLevelCacheEnabled() ) {
-				final CacheDataDescriptionImpl cacheDataDescription = CacheDataDescriptionImpl.decode( model );
-
-				NaturalIdRegion naturalIdRegion = null;
-				try {
-					naturalIdRegion = regionFactory.buildNaturalIdRegion(
-							naturalIdCacheRegionName,
-							sessionFactory.getProperties(),
-							cacheDataDescription
-					);
-				}
-				catch ( UnsupportedOperationException e ) {
-					LOG.warnf(
-							"Shared cache region factory [%s] does not support natural id caching; " +
-									"shared NaturalId caching will be disabled for not be enabled for %s",
-							regionFactory.getClass().getName(),
-							model.getEntityName()
-					);
-				}
-
-				if (naturalIdRegion != null) {
-					naturalIdAccessStrategy = naturalIdRegion.buildAccessStrategy( regionFactory.getDefaultAccessType() );
-					naturalIdRegionAccessStrategyMap.put( naturalIdCacheRegionName, naturalIdAccessStrategy );
-				}
+			try {
+				return getNaturalIdRegion(
+						naturalIdCacheRegionName,
+						CacheDataDescriptionImpl.decode( model )
+				).buildAccessStrategy( regionFactory.getDefaultAccessType() );
+			}
+			catch ( UnsupportedOperationException e ) {
+				LOG.warnf(
+						"Shared cache region factory [%s] does not support natural id caching; " +
+								"shared NaturalId caching will be disabled for not be enabled for %s",
+						regionFactory.getClass().getName(),
+						model.getEntityName()
+				);
+				return null;
 			}
 		}
-		return naturalIdAccessStrategy;
+		return null;
 	}
 
 	@Override
 	public CollectionRegionAccessStrategy determineCollectionRegionAccessStrategy(Collection model) {
 		final String cacheRegionName = cacheRegionPrefix + model.getCacheRegionName();
-		CollectionRegionAccessStrategy accessStrategy = collectionRegionAccessStrategyMap.get( cacheRegionName );
-		if ( accessStrategy == null && settings.isSecondLevelCacheEnabled()) {
+		if (settings.isSecondLevelCacheEnabled()) {
 			final AccessType accessType = AccessType.fromExternalName(model.getCacheConcurrencyStrategy());
 			if (accessType != null) {
-				LOG.tracev("Building shared cache region for collection data [{0}]", model.getRole());
-				CollectionRegion collectionRegion = regionFactory.buildCollectionRegion(
+				return getCollectionRegion(
 						cacheRegionName,
-						sessionFactory.getProperties(),
-						CacheDataDescriptionImpl.decode( model)
-				);
-				accessStrategy = collectionRegion.buildAccessStrategy( accessType );
-				collectionRegionAccessStrategyMap.put( cacheRegionName, accessStrategy );
+						CacheDataDescriptionImpl.decode( model )
+				).buildAccessStrategy(accessType);
 			}
 		}
-		return accessStrategy;
+		return null;
 	}
+
+	private NaturalIdRegion getNaturalIdRegion(String cacheRegionName, CacheDataDescription cacheDataDescription) {
+		Region region = allRegionsMap.get(cacheRegionName);
+		if (region == null) {
+			LOG.tracef( "Building natural id cache region for data [%s]", cacheDataDescription );
+			NaturalIdRegion naturalIdRegion = regionFactory.buildNaturalIdRegion(
+					cacheRegionName,
+					sessionFactory.getProperties(),
+					cacheDataDescription
+			);
+			allRegionsMap.put(cacheRegionName, naturalIdRegion);
+			return naturalIdRegion;
+		}
+		else if (region instanceof NaturalIdRegion) {
+			NaturalIdRegion naturalIdRegion = (NaturalIdRegion) region;
+			checkCacheDataDescriptions( naturalIdRegion.getCacheDataDescription(), cacheDataDescription);
+			return naturalIdRegion;
+		}
+		throw new IllegalStateException("Region type mismatch, needed EntityRegion got " + region.getClass());
+	}
+
+	private EntityRegion getEntityRegion(String cacheRegionName, CacheDataDescription cacheDataDescription) {
+		Region region = allRegionsMap.get(cacheRegionName);
+		if (region == null) {
+			LOG.tracef( "Building shared cache region for entity data [%s]", cacheDataDescription );
+			EntityRegion entityRegion = regionFactory.buildEntityRegion(
+					cacheRegionName,
+					sessionFactory.getProperties(),
+					cacheDataDescription
+			);
+			allRegionsMap.put(cacheRegionName, entityRegion);
+			return entityRegion;
+		}
+		else if (region instanceof EntityRegion) {
+			EntityRegion entityRegion = (EntityRegion) region;
+			checkCacheDataDescriptions( entityRegion.getCacheDataDescription(), cacheDataDescription );
+			return entityRegion;
+		}
+		throw new IllegalStateException("Region type mismatch, needed EntityRegion got " + region.getClass());
+	}
+
+	private CollectionRegion getCollectionRegion(String cacheRegionName, CacheDataDescription cacheDataDescription) {
+		Region region = allRegionsMap.get(cacheRegionName);
+		if (region == null) {
+			LOG.tracev("Building shared cache region for collection data [{0}]", cacheDataDescription);
+			CollectionRegion collectionRegion = regionFactory.buildCollectionRegion(
+					cacheRegionName,
+					sessionFactory.getProperties(),
+					cacheDataDescription
+			);
+			allRegionsMap.put(cacheRegionName, collectionRegion);
+			return collectionRegion;
+		}
+		else if (region instanceof CollectionRegion) {
+			CollectionRegion collectionRegion = (CollectionRegion) region;
+			checkCacheDataDescriptions(collectionRegion.getCacheDataDescription(), cacheDataDescription);
+			return collectionRegion;
+		}
+		throw new IllegalStateException("Region type mismatch, needed CollectionRegion got " + region.getClass());
+	}
+
+    /*
+     * TODO: This method needs more attention, right now it's pretty pessimistic.
+     */
+	private void checkCacheDataDescriptions(CacheDataDescription a, CacheDataDescription b) {
+		if (a.isMutable() ^ b.isMutable()) {
+			throw new IllegalArgumentException("Incompatible cache data cannot share regions (" + a + " & " + b + ")");
+		}
+		if (a.isVersioned() ^ b.isVersioned()) {
+			throw new IllegalArgumentException("Incompatible cache data cannot share regions (" + a + " & " + b + ")");
+		}
+		if (a.isVersioned() && a.getVersionComparator() != b.getVersionComparator()) {
+			throw new IllegalArgumentException("Incompatible cache data cannot share regions (" + a + " & " + b + ")");
+		}
+		if (a.getKeyType() != b.getKeyType()) {
+			throw new IllegalArgumentException("Incompatible cache data cannot share regions (" + a + " & " + b + ")");
+		}
+	}
+
 }
