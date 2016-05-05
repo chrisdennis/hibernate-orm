@@ -61,6 +61,12 @@ abstract class AbstractReadWriteRegionAccessStrategy<R extends JCacheTransaction
 			Lockable item = (Lockable) region.get( key );
 
 			if (item == null) {
+				/*
+				 * If the item is null due a softlock being evicted... then this
+				 * is wrong, the in-doubt soft-lock could get replaced with the
+				 * old value.  All that can be done from a JCache perspective is
+				 * to log a warning.
+				 */
 				if (region.putIfAbsent( key, new Item( value, version, txTimestamp, nextItemId() ))) {
 					return true;
 				}
@@ -87,6 +93,10 @@ abstract class AbstractReadWriteRegionAccessStrategy<R extends JCacheTransaction
 			long timeout = region.nextTimestamp() + region.getTimeout();
 
 			if ( item == null ) {
+				/*
+				 * What happens here if a previous soft-lock was evicted to make
+				 * this null.
+				 */
 				Lock lock = new Lock(timeout, uuid, nextLockId(), version);
 				if (region.putIfAbsent( key, lock )) {
 					return lock;
@@ -153,9 +163,7 @@ abstract class AbstractReadWriteRegionAccessStrategy<R extends JCacheTransaction
 		LOG.missingLock( region, key, lock );
 		long ts = region.nextTimestamp() + region.getTimeout();
 		// create new lock that times out immediately
-		Lock newLock = new Lock( ts, uuid, nextLockId.getAndIncrement(), null );
-		newLock.unlock( ts );
-		// This isn't really necessary, could be a simple put, but for completeness, though given pinning, this also should never happen
+		Lock newLock = new Lock( ts, uuid, nextLockId.getAndIncrement(), null ).unlock( ts );
 		region.put( key, newLock );
 	}
 

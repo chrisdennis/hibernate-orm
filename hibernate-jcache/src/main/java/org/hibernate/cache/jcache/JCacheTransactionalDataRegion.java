@@ -32,10 +32,12 @@ public class JCacheTransactionalDataRegion extends JCacheRegion implements Trans
 		this.options = options;
 	}
 
+	@Override
 	public boolean isTransactionAware() {
 		return false;
 	}
 
+	@Override
 	public CacheDataDescription getCacheDataDescription() {
 		return metadata;
 	}
