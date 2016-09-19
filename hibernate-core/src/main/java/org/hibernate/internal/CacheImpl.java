@@ -24,7 +24,6 @@ import org.hibernate.cache.spi.EntityRegion;
 import org.hibernate.cache.spi.NaturalIdRegion;
 import org.hibernate.cache.spi.QueryCache;
 import org.hibernate.cache.spi.QueryResultsRegion;
-import org.hibernate.cache.spi.Region;
 import org.hibernate.cache.spi.RegionFactory;
 import org.hibernate.cache.spi.TimestampsRegion;
 import org.hibernate.cache.spi.UpdateTimestampsCache;
@@ -55,7 +54,9 @@ public class CacheImpl implements CacheImplementor {
 	private final transient RegionFactory regionFactory;
 	private final String cacheRegionPrefix;
 
-	private final transient ConcurrentHashMap<String, Region> allRegionsMap = new ConcurrentHashMap<>();
+	private final transient ConcurrentHashMap<String, EntityRegion> entityRegions = new ConcurrentHashMap<>();
+	private final transient ConcurrentHashMap<String, CollectionRegion> collectionRegions = new ConcurrentHashMap<>();
+	private final transient ConcurrentHashMap<String, NaturalIdRegion> naturalIdRegions = new ConcurrentHashMap<>();
 
 	private final transient UpdateTimestampsCache updateTimestampsCache;
 	private final transient QueryCache defaultQueryCache;
@@ -285,7 +286,15 @@ public class CacheImpl implements CacheImplementor {
 
 	@Override
 	public void close() {
-		for ( Region region : allRegionsMap.values() ) {
+		for ( EntityRegion region : entityRegions.values() ) {
+			region.destroy();
+		}
+
+		for ( CollectionRegion region : collectionRegions.values() ) {
+			region.destroy();
+		}
+
+		for ( NaturalIdRegion region : naturalIdRegions.values() ) {
 			region.destroy();
 		}
 
@@ -349,7 +358,9 @@ public class CacheImpl implements CacheImplementor {
 	@Override
 	public String[] getSecondLevelCacheRegionNames() {
 		final Set<String> names = new HashSet<>();
-		names.addAll( allRegionsMap.keySet() );
+		names.addAll( entityRegions.keySet() );
+		names.addAll( collectionRegions.keySet() );
+		names.addAll( naturalIdRegions.keySet() );
 		if ( settings.isQueryCacheEnabled() ) {
 			names.add( updateTimestampsCache.getRegion().getName() );
 			names.addAll( queryCaches.keySet() );
@@ -359,35 +370,17 @@ public class CacheImpl implements CacheImplementor {
 
 	@Override
 	public EntityRegion getEntityRegion(String regionName) {
-		Region region = allRegionsMap.get(regionName);
-		if (region == null || !(region instanceof EntityRegion)) {
-			return null;
-		}
-		else {
-			return (EntityRegion) region;
-		}
+		return entityRegions.get(regionName);
 	}
 
 	@Override
 	public CollectionRegion getCollectionRegion(String regionName) {
-		Region region = allRegionsMap.get(regionName);
-		if (region == null || !(region instanceof CollectionRegion)) {
-			return null;
-		}
-		else {
-			return (CollectionRegion) region;
-		}
+		return collectionRegions.get(regionName);
 	}
 
 	@Override
 	public NaturalIdRegion getNaturalIdCacheRegion(String regionName) {
-		Region region = allRegionsMap.get(regionName);
-		if (region == null || !(region instanceof NaturalIdRegion)) {
-			return null;
-		}
-		else {
-			return (NaturalIdRegion) region;
-		}
+		return naturalIdRegions.get(regionName);
 	}
 
 	@Override
@@ -492,7 +485,7 @@ public class CacheImpl implements CacheImplementor {
 	}
 
 	private NaturalIdRegion getNaturalIdRegion(String cacheRegionName, CacheDataDescription cacheDataDescription) {
-		Region region = allRegionsMap.get(cacheRegionName);
+		NaturalIdRegion region = naturalIdRegions.get(cacheRegionName);
 		if (region == null) {
 			LOG.tracef( "Building natural id cache region for data [%s]", cacheDataDescription );
 			NaturalIdRegion naturalIdRegion = regionFactory.buildNaturalIdRegion(
@@ -500,19 +493,17 @@ public class CacheImpl implements CacheImplementor {
 					sessionFactory.getProperties(),
 					cacheDataDescription
 			);
-			allRegionsMap.put(cacheRegionName, naturalIdRegion);
+			naturalIdRegions.put(cacheRegionName, naturalIdRegion);
 			return naturalIdRegion;
 		}
-		else if (region instanceof NaturalIdRegion) {
-			NaturalIdRegion naturalIdRegion = (NaturalIdRegion) region;
-			checkCacheDataDescriptions( naturalIdRegion.getCacheDataDescription(), cacheDataDescription);
-			return naturalIdRegion;
+		else {
+			checkCacheDataDescriptions( region.getCacheDataDescription(), cacheDataDescription);
+			return region;
 		}
-		throw new IllegalStateException("Region type mismatch, needed EntityRegion got " + region.getClass());
 	}
 
 	private EntityRegion getEntityRegion(String cacheRegionName, CacheDataDescription cacheDataDescription) {
-		Region region = allRegionsMap.get(cacheRegionName);
+		EntityRegion region = entityRegions.get(cacheRegionName);
 		if (region == null) {
 			LOG.tracef( "Building shared cache region for entity data [%s]", cacheDataDescription );
 			EntityRegion entityRegion = regionFactory.buildEntityRegion(
@@ -520,19 +511,17 @@ public class CacheImpl implements CacheImplementor {
 					sessionFactory.getProperties(),
 					cacheDataDescription
 			);
-			allRegionsMap.put(cacheRegionName, entityRegion);
+			entityRegions.put(cacheRegionName, entityRegion);
 			return entityRegion;
 		}
-		else if (region instanceof EntityRegion) {
-			EntityRegion entityRegion = (EntityRegion) region;
-			checkCacheDataDescriptions( entityRegion.getCacheDataDescription(), cacheDataDescription );
-			return entityRegion;
+		else {
+			checkCacheDataDescriptions( region.getCacheDataDescription(), cacheDataDescription );
+			return region;
 		}
-		throw new IllegalStateException("Region type mismatch, needed EntityRegion got " + region.getClass());
 	}
 
 	private CollectionRegion getCollectionRegion(String cacheRegionName, CacheDataDescription cacheDataDescription) {
-		Region region = allRegionsMap.get(cacheRegionName);
+		CollectionRegion region = collectionRegions.get(cacheRegionName);
 		if (region == null) {
 			LOG.tracev("Building shared cache region for collection data [{0}]", cacheDataDescription);
 			CollectionRegion collectionRegion = regionFactory.buildCollectionRegion(
@@ -540,15 +529,13 @@ public class CacheImpl implements CacheImplementor {
 					sessionFactory.getProperties(),
 					cacheDataDescription
 			);
-			allRegionsMap.put(cacheRegionName, collectionRegion);
+			collectionRegions.put(cacheRegionName, collectionRegion);
 			return collectionRegion;
 		}
-		else if (region instanceof CollectionRegion) {
-			CollectionRegion collectionRegion = (CollectionRegion) region;
-			checkCacheDataDescriptions(collectionRegion.getCacheDataDescription(), cacheDataDescription);
-			return collectionRegion;
+		else {
+			checkCacheDataDescriptions(region.getCacheDataDescription(), cacheDataDescription);
+			return region;
 		}
-		throw new IllegalStateException("Region type mismatch, needed CollectionRegion got " + region.getClass());
 	}
 
     /*
