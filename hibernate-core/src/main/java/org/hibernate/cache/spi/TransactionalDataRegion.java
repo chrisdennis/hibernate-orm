@@ -40,4 +40,23 @@ public interface TransactionalDataRegion extends Region {
 	 * @return The data descriptor.
 	 */
 	public CacheDataDescription getCacheDataDescription();
+
+	/*
+	 * TODO: This method needs more attention, right now it's pretty pessimistic.
+	 */
+	default void validateCompatibilityWith(CacheDataDescription b) {
+		CacheDataDescription a = getCacheDataDescription();
+		if (a.isMutable() ^ b.isMutable()) {
+			throw new IllegalArgumentException("Incompatible cache data cannot share regions (" + a + " & " + b + ")");
+		}
+		if (a.isVersioned() ^ b.isVersioned()) {
+			throw new IllegalArgumentException("Incompatible cache data cannot share regions (" + a + " & " + b + ")");
+		}
+		if (a.isVersioned() && a.getVersionComparator() != b.getVersionComparator()) {
+			throw new IllegalArgumentException("Incompatible cache data cannot share regions (" + a + " & " + b + ")");
+		}
+		if (a.getKeyType() != b.getKeyType()) {
+			throw new IllegalArgumentException("Incompatible cache data cannot share regions (" + a + " & " + b + ")");
+		}
+	}
 }

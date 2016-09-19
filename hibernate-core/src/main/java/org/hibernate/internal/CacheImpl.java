@@ -497,7 +497,7 @@ public class CacheImpl implements CacheImplementor {
 			return naturalIdRegion;
 		}
 		else {
-			checkCacheDataDescriptions( region.getCacheDataDescription(), cacheDataDescription);
+			region.validateCompatibilityWith(cacheDataDescription);
 			return region;
 		}
 	}
@@ -515,7 +515,7 @@ public class CacheImpl implements CacheImplementor {
 			return entityRegion;
 		}
 		else {
-			checkCacheDataDescriptions( region.getCacheDataDescription(), cacheDataDescription );
+			region.validateCompatibilityWith(cacheDataDescription);
 			return region;
 		}
 	}
@@ -533,27 +533,8 @@ public class CacheImpl implements CacheImplementor {
 			return collectionRegion;
 		}
 		else {
-			checkCacheDataDescriptions(region.getCacheDataDescription(), cacheDataDescription);
+			region.validateCompatibilityWith(cacheDataDescription);
 			return region;
 		}
 	}
-
-    /*
-     * TODO: This method needs more attention, right now it's pretty pessimistic.
-     */
-	private void checkCacheDataDescriptions(CacheDataDescription a, CacheDataDescription b) {
-		if (a.isMutable() ^ b.isMutable()) {
-			throw new IllegalArgumentException("Incompatible cache data cannot share regions (" + a + " & " + b + ")");
-		}
-		if (a.isVersioned() ^ b.isVersioned()) {
-			throw new IllegalArgumentException("Incompatible cache data cannot share regions (" + a + " & " + b + ")");
-		}
-		if (a.isVersioned() && a.getVersionComparator() != b.getVersionComparator()) {
-			throw new IllegalArgumentException("Incompatible cache data cannot share regions (" + a + " & " + b + ")");
-		}
-		if (a.getKeyType() != b.getKeyType()) {
-			throw new IllegalArgumentException("Incompatible cache data cannot share regions (" + a + " & " + b + ")");
-		}
-	}
-
 }
